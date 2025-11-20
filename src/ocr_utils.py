@@ -143,27 +143,35 @@ class MemeOCR:
         
         return combined_text, detailed_results
     
-    def extract_text(self, image: Image.Image) -> Dict:
+    def extract_text(self, image: Image.Image, method='easyocr') -> Dict:
         """
         Main method to extract text from image
         
         Args:
             image: PIL Image
+            method: OCR method to use ('easyocr' or 'tesseract')
             
         Returns:
             Dictionary with extracted text and metadata
         """
-        if self.use_easyocr:
+        # Override use_easyocr based on method parameter
+        use_method = method.lower() == 'easyocr'
+        
+        if use_method or self.use_easyocr:
             text, details = self.extract_text_easyocr(image)
         else:
             text, details = self.extract_text_tesseract(image)
+        
+        # Calculate average confidence
+        avg_confidence = sum(d['confidence'] for d in details) / len(details) if details else 0.0
         
         return {
             'text': text,
             'cleaned_text': self.clean_text(text),
             'details': details,
             'word_count': len(text.split()),
-            'has_text': len(text.strip()) > 0
+            'has_text': len(text.strip()) > 0,
+            'confidence': avg_confidence  # Added for demo.py compatibility
         }
     
     def clean_text(self, text: str) -> str:
@@ -235,3 +243,7 @@ def extract_text_from_image(image: Image.Image, use_easyocr=True) -> Dict:
     """
     ocr = MemeOCR(use_easyocr=use_easyocr)
     return ocr.extract_text(image)
+
+
+# Alias for backward compatibility
+OCRExtractor = MemeOCR

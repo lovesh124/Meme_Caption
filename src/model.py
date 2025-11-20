@@ -132,6 +132,48 @@ class MemeCrafterModel(nn.Module):
         
         return generated_text
     
+    def generate_caption(self, image, prompt=None, max_length=None, num_beams=None, temperature=None, **kwargs):
+        """
+        Generate caption for a single image (user-friendly wrapper for demo)
+        
+        Args:
+            image: PIL Image or image path
+            prompt: Optional text prompt to guide generation
+            max_length: Maximum length of generated caption
+            num_beams: Number of beams for beam search
+            temperature: Sampling temperature
+            **kwargs: Additional generation parameters
+        
+        Returns:
+            Generated caption as a string
+        """
+        from PIL import Image
+        
+        # Load image if path is provided
+        if isinstance(image, str):
+            image = Image.open(image).convert('RGB')
+        
+        # Process image
+        inputs = self.processor(images=image, return_tensors="pt")
+        pixel_values = inputs.pixel_values.to(self.model.device)
+        
+        # Override generation parameters if provided
+        generation_kwargs = {}
+        if max_length is not None:
+            generation_kwargs['max_length'] = max_length
+        if num_beams is not None:
+            generation_kwargs['num_beams'] = num_beams
+        if temperature is not None:
+            generation_kwargs['temperature'] = temperature
+        generation_kwargs.update(kwargs)
+        
+        # Generate caption
+        with torch.no_grad():
+            captions = self.generate(pixel_values, prompt=prompt, **generation_kwargs)
+        
+        # Return first caption (single image)
+        return captions[0] if isinstance(captions, list) else captions
+    
     def save_model(self, save_path):
         """Save model and processor"""
         print(f"Saving model to {save_path}")
