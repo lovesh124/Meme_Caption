@@ -3,6 +3,7 @@ Configuration file for MemeCrafter model
 Contains all hyperparameters and paths
 """
 import os
+import torch
 from dataclasses import dataclass
 from typing import Optional
 
@@ -65,14 +66,24 @@ class Config:
     use_wandb: bool = False  # Set to True to use Weights & Biases
     wandb_project: str = "memecrafter"
     
-    # Device
-    device: str = "cuda"  # For Mac M1/M2, use "cuda" for NVIDIA, "cpu" for CPU
+    # Device - Auto-detect the best available device
+    device: str = None  # Will be set in __post_init__
     
     def __post_init__(self):
         # Create directories if they don't exist
         os.makedirs(self.processed_data_dir, exist_ok=True)
         os.makedirs(self.models_dir, exist_ok=True)
         os.makedirs(self.results_dir, exist_ok=True)
+        
+        # Auto-detect device
+        if self.device is None:
+            if torch.cuda.is_available():
+                self.device = "cuda"
+            elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+                self.device = "mps"  # Apple Silicon GPU
+            else:
+                self.device = "cpu"
+            print(f"Auto-detected device: {self.device}")
 
 # Create a global config instance
 config = Config()
