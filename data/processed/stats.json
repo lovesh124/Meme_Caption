@@ -1,0 +1,14 @@
+{
+  "total_samples": 6974,
+  "train_samples": 5578,
+  "val_samples": 698,
+  "test_samples": 698,
+  "avg_caption_length": 82.16762259822197,
+  "sentiment_distribution": {
+    "positive": 3118,
+    "neutral": 2195,
+    "very_positive": 1031,
+    "negative": 479,
+    "very_negative": 151
+  }
+}

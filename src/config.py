@@ -66,7 +66,7 @@ class Config:
     wandb_project: str = "memecrafter"
     
     # Device
-    device: str = "mps"  # For Mac M1/M2, use "cuda" for NVIDIA, "cpu" for CPU
+    device: str = "cuda"  # For Mac M1/M2, use "cuda" for NVIDIA, "cpu" for CPU
     
     def __post_init__(self):
         # Create directories if they don't exist
