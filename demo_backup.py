@@ -362,8 +362,7 @@ Confidence: {base_results['sentiment']['confidence']:.2%}
                 analyze_btn.click(
                     fn=analyze_image,
                     inputs=input_image,
-                    outputs=[ocr_output, caption_output, context_output, summary_output, sentiment_output],
-                    api_name="analyze"
+                    outputs=[ocr_output, caption_output, context_output, summary_output, sentiment_output]
                 )
             
             # Tab 2: Model Comparison
@@ -386,8 +385,7 @@ Confidence: {base_results['sentiment']['confidence']:.2%}
                 compare_btn.click(
                     fn=compare_models_ui,
                     inputs=compare_image,
-                    outputs=[comparison_output, comparison_detail],
-                    api_name="compare"
+                    outputs=[comparison_output, comparison_detail]
                 )
             
             # Tab 3: About
@@ -470,9 +468,11 @@ def main():
     print(f"\nLaunching demo on port {args.port}...")
     print("=" * 60)
     
+    # Disable API mode to bypass JSON schema bug
     demo.launch(
         server_port=args.port,
-        share=args.share
+        share=args.share,
+        show_api=False  # Disable API documentation to avoid schema bug
     )
 
 
