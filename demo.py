@@ -49,19 +49,18 @@ class MemeAnalyzer:
         self.model.to(self.device)
         self.model.eval()
         
-        # Initialize base BLIP-2 model for visual descriptions
-        # This model is NOT fine-tuned and will give pure visual descriptions
-        print("Loading base BLIP-2 for visual descriptions...")
-        # Force loading from Hugging Face (not local cache) by explicitly specifying model name
-        from transformers import Blip2Processor, Blip2ForConditionalGeneration
-        self.base_processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
-        self.base_blip2 = Blip2ForConditionalGeneration.from_pretrained(
-            "Salesforce/blip2-opt-2.7b",
+        # Initialize BLIP v1 for pure visual descriptions (not BLIP-2)
+        # BLIP v1 focuses more on visual content and less on text in images
+        print("Loading BLIP v1 for visual descriptions...")
+        from transformers import BlipProcessor, BlipForConditionalGeneration
+        self.base_processor = BlipProcessor.from_pretrained("Salesforce/blip-image-captioning-base")
+        self.base_blip = BlipForConditionalGeneration.from_pretrained(
+            "Salesforce/blip-image-captioning-base",
             torch_dtype=torch.float16 if config.device != "cpu" else torch.float32,
         )
-        self.base_blip2.to(self.device)
-        self.base_blip2.eval()
-        print("Base model loaded successfully!")
+        self.base_blip.to(self.device)
+        self.base_blip.eval()
+        print("BLIP v1 loaded successfully!")
     
     def analyze_meme(self, image):
         """
@@ -84,18 +83,17 @@ class MemeAnalyzer:
         results['ocr_text'] = ocr_result['text']
         results['ocr_confidence'] = ocr_result['confidence']
         
-        # 2. Generate TRUE visual description using base BLIP-2 (not fine-tuned)
-        print("Generating visual description with base BLIP-2...")
-        # Use the raw base BLIP-2 model directly (no fine-tuning)
+        # 2. Generate pure visual description using BLIP v1 (not fine-tuned)
+        print("Generating visual description with BLIP v1...")
+        # BLIP v1 focuses on visual content more than text in images
         inputs = self.base_processor(images=image, return_tensors="pt")
         pixel_values = inputs.pixel_values.to(self.device)
         
         with torch.no_grad():
-            generated_ids = self.base_blip2.generate(
+            generated_ids = self.base_blip.generate(
                 pixel_values=pixel_values,
                 max_length=50,
-                num_beams=5,
-                do_sample=False  # Deterministic for pure visual description
+                num_beams=5
             )
         
         visual_description = self.base_processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
@@ -410,8 +408,8 @@ Confidence: {base_results['sentiment']['confidence']:.2%}
                     
                     with gr.Column(scale=1):
                         ocr_output = gr.Textbox(label="OCR Results", lines=3, value="")
-                        visual_output = gr.Textbox(label="Visual Description (Base BLIP-2)", lines=3, value="")
-                        caption_output = gr.Textbox(label="Meme Caption (Fine-tuned)", lines=3, value="")
+                        visual_output = gr.Textbox(label="Visual Description (BLIP v1 - Visual Only)", lines=3, value="")
+                        caption_output = gr.Textbox(label="Meme Caption (Fine-tuned BLIP-2)", lines=3, value="")
                 
                 with gr.Row():
                     context_output = gr.Textbox(label="Context-Aware Analysis", lines=4, value="")
