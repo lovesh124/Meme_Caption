@@ -63,13 +63,12 @@ class MemeAnalyzer:
             
             # Generate TRUE visual description using base BLIP-2
             print("Generating visual description with base BLIP-2...")
-            visual_prompt = "Describe what you see in this image, ignoring any text:"
             visual_description = self.base_model.generate_caption(
                 image,
-                prompt=visual_prompt,
                 max_length=50,
                 num_beams=5
             )
+            # Note: No prompt - let base BLIP-2 naturally describe what it sees
             results['visual_description'] = visual_description
             print(f"Visual description: {visual_description}")
             

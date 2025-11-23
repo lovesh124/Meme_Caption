@@ -79,14 +79,13 @@ class MemeAnalyzer:
         
         # 2. Generate TRUE visual description using base BLIP-2 (not fine-tuned)
         print("Generating visual description with base BLIP-2...")
-        visual_prompt = "Describe what you see in this image, ignoring any text:"
         visual_description = self.base_model.generate_caption(
             image,
-            prompt=visual_prompt,
             max_length=50,
             num_beams=5,
             temperature=0.7
         )
+        # Note: Generate without a prompt to get pure visual description
         results['visual_description'] = visual_description
         
         # 3. Generate meme caption with fine-tuned model (may include text content)
@@ -138,7 +137,7 @@ class MemeAnalyzer:
         sentiment_response = self.model.generate_caption(
             image, 
             prompt=sentiment_prompt, 
-            max_length=10,
+            max_length=100,
             num_beams=3,
             temperature=0.5
         ).lower().strip()
@@ -174,7 +173,7 @@ class MemeAnalyzer:
         explanation = self.model.generate_caption(
             image,
             prompt=explanation_prompt,
-            max_length=60,
+            max_length=100,
             num_beams=3,
             temperature=0.7
         )
@@ -512,7 +511,7 @@ def main():
     
     demo.launch(
         server_port=args.port,
-        share=args.share
+        share=True
     )
 
 
