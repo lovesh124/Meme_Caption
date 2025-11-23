@@ -32,8 +32,8 @@ class MemeAnalyzer:
         print("Initializing OCR extractor...")
         self.ocr = OCRExtractor()
         
-        # Initialize model
-        print("Loading BLIP-2 model...")
+        # Initialize fine-tuned model
+        print("Loading fine-tuned BLIP-2 model...")
         self.model = MemeCrafterModel(use_lora=config.use_lora)
         
         # Load fine-tuned weights if provided
@@ -47,6 +47,14 @@ class MemeAnalyzer:
         
         self.model.to(self.device)
         self.model.eval()
+        
+        # Initialize base BLIP-2 model for visual descriptions
+        # This model is NOT fine-tuned and will give pure visual descriptions
+        print("Loading base BLIP-2 for visual descriptions...")
+        self.base_model = MemeCrafterModel(use_lora=False)
+        self.base_model.to(self.device)
+        self.base_model.eval()
+        print("Base model loaded successfully!")
     
     def analyze_meme(self, image):
         """
@@ -69,8 +77,20 @@ class MemeAnalyzer:
         results['ocr_text'] = ocr_result['text']
         results['ocr_confidence'] = ocr_result['confidence']
         
-        # 2. Generate caption with BLIP-2
-        print("Generating caption with BLIP-2...")
+        # 2. Generate TRUE visual description using base BLIP-2 (not fine-tuned)
+        print("Generating visual description with base BLIP-2...")
+        visual_prompt = "Describe what you see in this image, ignoring any text:"
+        visual_description = self.base_model.generate_caption(
+            image,
+            prompt=visual_prompt,
+            max_length=50,
+            num_beams=5,
+            temperature=0.7
+        )
+        results['visual_description'] = visual_description
+        
+        # 3. Generate meme caption with fine-tuned model (may include text content)
+        print("Generating meme caption with fine-tuned BLIP-2...")
         caption = self.model.generate_caption(
             image,
             max_length=config.max_length,
@@ -79,7 +99,7 @@ class MemeAnalyzer:
         )
         results['generated_caption'] = caption
         
-        # 3. Generate context-aware analysis (with OCR text as prompt)
+        # 4. Generate context-aware analysis (with OCR text as prompt)
         if ocr_result['text']:
             print("Generating context-aware analysis...")
             prompt = f"This meme contains the text: '{ocr_result['text']}'. Analyze the sentiment and meaning:"
@@ -94,12 +114,12 @@ class MemeAnalyzer:
         else:
             results['context_analysis'] = "No text detected in meme."
         
-        # 4. Analyze sentiment using BLIP-2 directly
+        # 5. Analyze sentiment using BLIP-2 directly
         print("Analyzing sentiment with BLIP-2...")
         sentiment_scores = self._analyze_sentiment_blip2(image, ocr_result['text'])
         results['sentiment'] = sentiment_scores
         
-        # 5. Generate comprehensive summary
+        # 6. Generate comprehensive summary
         results['summary'] = self._generate_summary(results)
         
         return results
@@ -257,13 +277,14 @@ def create_demo(model_path=None):
     def analyze_image(image):
         """Analyze uploaded image"""
         if image is None:
-            return "Please upload an image", "", "", "", ""
+            return "Please upload an image", "", "", "", "", ""
         
         try:
             results = analyzer.analyze_meme(image)
             
             # Format outputs
             ocr_output = f"**Detected Text:** {results['ocr_text']}\n\n**Confidence:** {results['ocr_confidence']:.2%}"
+            visual_output = results['visual_description']  # NEW: True visual description
             caption_output = results['generated_caption']
             context_output = results['context_analysis']
             summary_output = results['summary']
@@ -272,17 +293,16 @@ def create_demo(model_path=None):
             sentiment_text = f"""**Overall Sentiment:** {results['sentiment']['overall'].upper()}
 **Confidence:** {results['sentiment']['confidence']:.2%}
 
-**Detailed Breakdown:**
+**Explanation:** {results['sentiment']['explanation']}
+
+**Raw Response:** {results['sentiment']['raw_response']}
 """
-            for sent_type, score in results['sentiment']['scores'].items():
-                if score > 0:
-                    sentiment_text += f"  • {sent_type.capitalize()}: {score:.2%}\n"
             
-            return ocr_output, caption_output, context_output, summary_output, sentiment_text
+            return ocr_output, visual_output, caption_output, context_output, summary_output, sentiment_text
         
         except Exception as e:
             error_msg = f"Error analyzing image: {str(e)}"
-            return error_msg, "", "", "", ""
+            return error_msg, "", "", "", "", ""
     
     def compare_models_ui(image):
         """Compare base vs fine-tuned model"""
@@ -367,7 +387,8 @@ Confidence: {base_results['sentiment']['confidence']:.2%}
                     
                     with gr.Column(scale=1):
                         ocr_output = gr.Textbox(label="OCR Results", lines=3, value="")
-                        caption_output = gr.Textbox(label="Generated Caption", lines=3, value="")
+                        visual_output = gr.Textbox(label="Visual Description (Base BLIP-2)", lines=3, value="")
+                        caption_output = gr.Textbox(label="Meme Caption (Fine-tuned)", lines=3, value="")
                 
                 with gr.Row():
                     context_output = gr.Textbox(label="Context-Aware Analysis", lines=4, value="")
@@ -381,7 +402,7 @@ Confidence: {base_results['sentiment']['confidence']:.2%}
                 analyze_btn.click(
                     fn=analyze_image,
                     inputs=input_image,
-                    outputs=[ocr_output, caption_output, context_output, summary_output, sentiment_output],
+                    outputs=[ocr_output, visual_output, caption_output, context_output, summary_output, sentiment_output],
                     api_name="analyze"
                 )
             

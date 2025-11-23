@@ -31,8 +31,8 @@ class MemeAnalyzer:
         print("Initializing OCR extractor...")
         self.ocr = OCRExtractor(use_easyocr=True, languages=['en'])
         
-        # Initialize model
-        print("Loading BLIP-2 model...")
+        # Initialize fine-tuned model
+        print("Loading fine-tuned BLIP-2 model...")
         self.model = MemeCrafterModel(use_lora=config.use_lora)
         
         if model_path:
@@ -41,6 +41,13 @@ class MemeAnalyzer:
         
         self.model.to(self.device)
         self.model.eval()
+        
+        # Initialize base BLIP-2 model for visual descriptions
+        print("Loading base BLIP-2 for visual descriptions...")
+        self.base_model = MemeCrafterModel(use_lora=False)
+        self.base_model.to(self.device)
+        self.base_model.eval()
+        print("Base model loaded successfully!")
     
     def analyze_meme(self, image):
         print("Starting meme analysis...")
@@ -54,8 +61,20 @@ class MemeAnalyzer:
             results['ocr_confidence'] = ocr_result.get('confidence', 0.0)
             print(f"OCR complete. Text: {results['ocr_text']}")
             
-            # Generate caption
-            print("Generating caption...")
+            # Generate TRUE visual description using base BLIP-2
+            print("Generating visual description with base BLIP-2...")
+            visual_prompt = "Describe what you see in this image, ignoring any text:"
+            visual_description = self.base_model.generate_caption(
+                image,
+                prompt=visual_prompt,
+                max_length=50,
+                num_beams=5
+            )
+            results['visual_description'] = visual_description
+            print(f"Visual description: {visual_description}")
+            
+            # Generate meme caption with fine-tuned model
+            print("Generating meme caption with fine-tuned model...")
             caption = self.model.generate_caption(image, max_length=50, num_beams=5)
             results['caption'] = caption
             print(f"Caption: {caption}")
