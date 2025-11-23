@@ -82,7 +82,7 @@ class MemeAnalyzer:
         print("Generating visual description with base BLIP-2...")
         visual_description = self.base_model.generate_caption(
             image,
-            max_length=50,
+            max_length=100,
             num_beams=5,
             temperature=0.7
         )
@@ -184,7 +184,7 @@ class MemeAnalyzer:
         explanation = self.model.generate_caption(
             image,
             prompt=explanation_prompt,
-            max_length=60,
+            max_length=100,
             num_beams=3,
             temperature=0.7,
             do_sample=True
