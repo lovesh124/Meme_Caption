@@ -52,9 +52,15 @@ class MemeAnalyzer:
         # Initialize base BLIP-2 model for visual descriptions
         # This model is NOT fine-tuned and will give pure visual descriptions
         print("Loading base BLIP-2 for visual descriptions...")
-        self.base_model = MemeCrafterModel(use_lora=False)
-        self.base_model.to(self.device)
-        self.base_model.eval()
+        # Force loading from Hugging Face (not local cache) by explicitly specifying model name
+        from transformers import Blip2Processor, Blip2ForConditionalGeneration
+        self.base_processor = Blip2Processor.from_pretrained("Salesforce/blip2-opt-2.7b")
+        self.base_blip2 = Blip2ForConditionalGeneration.from_pretrained(
+            "Salesforce/blip2-opt-2.7b",
+            torch_dtype=torch.float16 if config.device != "cpu" else torch.float32,
+        )
+        self.base_blip2.to(self.device)
+        self.base_blip2.eval()
         print("Base model loaded successfully!")
     
     def analyze_meme(self, image):
@@ -80,13 +86,19 @@ class MemeAnalyzer:
         
         # 2. Generate TRUE visual description using base BLIP-2 (not fine-tuned)
         print("Generating visual description with base BLIP-2...")
-        visual_description = self.base_model.generate_caption(
-            image,
-            max_length=100,
-            num_beams=5,
-            temperature=0.7
-        )
-        # Note: Generate without a prompt to get pure visual description
+        # Use the raw base BLIP-2 model directly (no fine-tuning)
+        inputs = self.base_processor(images=image, return_tensors="pt")
+        pixel_values = inputs.pixel_values.to(self.device)
+        
+        with torch.no_grad():
+            generated_ids = self.base_blip2.generate(
+                pixel_values=pixel_values,
+                max_length=50,
+                num_beams=5,
+                do_sample=False  # Deterministic for pure visual description
+            )
+        
+        visual_description = self.base_processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
         results['visual_description'] = visual_description
         
         # 3. Generate meme caption with fine-tuned model (may include text content)
