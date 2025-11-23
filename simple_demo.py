@@ -60,8 +60,18 @@ class MemeAnalyzer:
         # Initialize GPT-2 for meme caption generation
         print("Loading GPT-2 for caption generation...")
         from transformers import GPT2LMHeadModel, GPT2Tokenizer
-        self.gpt2_tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-        self.gpt2_model = GPT2LMHeadModel.from_pretrained("gpt2")
+        
+        # Try to load fine-tuned GPT-2
+        gpt2_finetuned_path = os.path.join(config.models_dir, "gpt2_meme_final")
+        if os.path.exists(gpt2_finetuned_path):
+            print(f"Loading fine-tuned GPT-2 from {gpt2_finetuned_path}")
+            self.gpt2_tokenizer = GPT2Tokenizer.from_pretrained(gpt2_finetuned_path)
+            self.gpt2_model = GPT2LMHeadModel.from_pretrained(gpt2_finetuned_path)
+        else:
+            print("Fine-tuned GPT-2 not found, using base GPT-2")
+            self.gpt2_tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+            self.gpt2_model = GPT2LMHeadModel.from_pretrained("gpt2")
+        
         self.gpt2_tokenizer.pad_token = self.gpt2_tokenizer.eos_token
         self.gpt2_model.to(self.device)
         self.gpt2_model.eval()

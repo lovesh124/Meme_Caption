@@ -65,8 +65,21 @@ class MemeAnalyzer:
         # Initialize GPT-2 for meme caption generation from OCR + visual description
         print("Loading GPT-2 for caption generation...")
         from transformers import GPT2LMHeadModel, GPT2Tokenizer
-        self.gpt2_tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
-        self.gpt2_model = GPT2LMHeadModel.from_pretrained("gpt2")
+        
+        # Try to load fine-tuned GPT-2, fall back to base if not found
+        gpt2_finetuned_path = os.path.join(config.models_dir, "gpt2_meme_final")
+        if os.path.exists(gpt2_finetuned_path):
+            print(f"✓ Loading fine-tuned GPT-2 from {gpt2_finetuned_path}")
+            self.gpt2_tokenizer = GPT2Tokenizer.from_pretrained(gpt2_finetuned_path)
+            self.gpt2_model = GPT2LMHeadModel.from_pretrained(gpt2_finetuned_path)
+            self.is_gpt2_finetuned = True
+        else:
+            print("⚠️ Fine-tuned GPT-2 not found, using base GPT-2")
+            print("   To train GPT-2: python -m src.train_gpt2")
+            self.gpt2_tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+            self.gpt2_model = GPT2LMHeadModel.from_pretrained("gpt2")
+            self.is_gpt2_finetuned = False
+        
         self.gpt2_tokenizer.pad_token = self.gpt2_tokenizer.eos_token
         self.gpt2_model.to(self.device)
         self.gpt2_model.eval()
@@ -464,7 +477,8 @@ Confidence: {base_results['sentiment']['confidence']:.2%}
                     with gr.Column(scale=1):
                         ocr_output = gr.Textbox(label="OCR Results", lines=3, value="")
                         visual_output = gr.Textbox(label="Visual Description (BLIP v1 - Visual Only)", lines=3, value="")
-                        caption_output = gr.Textbox(label="Meme Caption (GPT-2 from OCR + Visual)", lines=3, value="")
+                        gpt2_label = "Meme Caption (Fine-tuned GPT-2)" if analyzer.is_gpt2_finetuned else "Meme Caption (Base GPT-2)"
+                        caption_output = gr.Textbox(label=gpt2_label, lines=3, value="")
                 
                 with gr.Row():
                     context_output = gr.Textbox(label="Context-Aware Analysis", lines=4, value="")
