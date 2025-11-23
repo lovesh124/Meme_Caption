@@ -61,6 +61,16 @@ class MemeAnalyzer:
         self.base_blip.to(self.device)
         self.base_blip.eval()
         print("BLIP v1 loaded successfully!")
+        
+        # Initialize GPT-2 for meme caption generation from OCR + visual description
+        print("Loading GPT-2 for caption generation...")
+        from transformers import GPT2LMHeadModel, GPT2Tokenizer
+        self.gpt2_tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+        self.gpt2_model = GPT2LMHeadModel.from_pretrained("gpt2")
+        self.gpt2_tokenizer.pad_token = self.gpt2_tokenizer.eos_token
+        self.gpt2_model.to(self.device)
+        self.gpt2_model.eval()
+        print("GPT-2 loaded successfully!")
     
     def analyze_meme(self, image):
         """
@@ -99,14 +109,9 @@ class MemeAnalyzer:
         visual_description = self.base_processor.batch_decode(generated_ids, skip_special_tokens=True)[0]
         results['visual_description'] = visual_description
         
-        # 3. Generate meme caption with fine-tuned model (may include text content)
-        print("Generating meme caption with fine-tuned BLIP-2...")
-        caption = self.model.generate_caption(
-            image,
-            max_length=config.max_length,
-            num_beams=5,
-            temperature=0.7
-        )
+        # 3. Generate meme caption using GPT-2 with OCR + visual description
+        print("Generating meme caption with GPT-2...")
+        caption = self._generate_meme_caption_gpt2(ocr_result['text'], visual_description)
         results['generated_caption'] = caption
         
         # 4. Generate context-aware analysis (with OCR text as prompt)
@@ -133,6 +138,56 @@ class MemeAnalyzer:
         results['summary'] = self._generate_summary(results)
         
         return results
+    
+    def _generate_meme_caption_gpt2(self, ocr_text, visual_description):
+        """
+        Generate meme caption using GPT-2 based on OCR text and visual description
+        
+        Args:
+            ocr_text: Text extracted from meme via OCR
+            visual_description: Visual description from BLIP v1
+            
+        Returns:
+            Generated meme caption
+        """
+        # Create prompt combining OCR text and visual description
+        if ocr_text and visual_description:
+            prompt = f"Meme image shows: {visual_description}. Text says: {ocr_text}. Meme caption:"
+        elif ocr_text:
+            prompt = f"Meme text: {ocr_text}. Caption:"
+        elif visual_description:
+            prompt = f"Image shows: {visual_description}. Meme caption:"
+        else:
+            prompt = "Meme caption:"
+        
+        # Tokenize
+        inputs = self.gpt2_tokenizer(prompt, return_tensors="pt", padding=True).to(self.device)
+        
+        # Generate with GPT-2
+        with torch.no_grad():
+            outputs = self.gpt2_model.generate(
+                inputs.input_ids,
+                attention_mask=inputs.attention_mask,
+                max_length=len(inputs.input_ids[0]) + 50,  # Add 50 tokens to prompt
+                num_beams=5,
+                temperature=0.8,
+                top_k=50,
+                top_p=0.95,
+                do_sample=True,
+                no_repeat_ngram_size=3,
+                pad_token_id=self.gpt2_tokenizer.eos_token_id
+            )
+        
+        # Decode and extract only the generated part (remove prompt)
+        full_text = self.gpt2_tokenizer.decode(outputs[0], skip_special_tokens=True)
+        # Extract the caption part after the prompt
+        caption = full_text[len(prompt):].strip()
+        
+        # If caption is empty or too short, return a default
+        if not caption or len(caption) < 5:
+            caption = full_text.strip()
+        
+        return caption
     
     def _analyze_sentiment_blip2(self, image, ocr_text):
         """
@@ -409,7 +464,7 @@ Confidence: {base_results['sentiment']['confidence']:.2%}
                     with gr.Column(scale=1):
                         ocr_output = gr.Textbox(label="OCR Results", lines=3, value="")
                         visual_output = gr.Textbox(label="Visual Description (BLIP v1 - Visual Only)", lines=3, value="")
-                        caption_output = gr.Textbox(label="Meme Caption (Fine-tuned BLIP-2)", lines=3, value="")
+                        caption_output = gr.Textbox(label="Meme Caption (GPT-2 from OCR + Visual)", lines=3, value="")
                 
                 with gr.Row():
                     context_output = gr.Textbox(label="Context-Aware Analysis", lines=4, value="")

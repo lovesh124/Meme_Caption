@@ -56,6 +56,16 @@ class MemeAnalyzer:
         self.base_blip.to(self.device)
         self.base_blip.eval()
         print("BLIP v1 loaded successfully!")
+        
+        # Initialize GPT-2 for meme caption generation
+        print("Loading GPT-2 for caption generation...")
+        from transformers import GPT2LMHeadModel, GPT2Tokenizer
+        self.gpt2_tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+        self.gpt2_model = GPT2LMHeadModel.from_pretrained("gpt2")
+        self.gpt2_tokenizer.pad_token = self.gpt2_tokenizer.eos_token
+        self.gpt2_model.to(self.device)
+        self.gpt2_model.eval()
+        print("GPT-2 loaded successfully!")
     
     def analyze_meme(self, image):
         print("Starting meme analysis...")
@@ -85,9 +95,9 @@ class MemeAnalyzer:
             results['visual_description'] = visual_description
             print(f"Visual description: {visual_description}")
             
-            # Generate meme caption with fine-tuned model
-            print("Generating meme caption with fine-tuned model...")
-            caption = self.model.generate_caption(image, max_length=50, num_beams=5)
+            # Generate meme caption using GPT-2
+            print("Generating meme caption with GPT-2...")
+            caption = self._generate_meme_caption_gpt2(ocr_result.get('text', ''), visual_description)
             results['caption'] = caption
             print(f"Caption: {caption}")
             
@@ -112,6 +122,45 @@ class MemeAnalyzer:
             raise
         
         return results
+    
+    def _generate_meme_caption_gpt2(self, ocr_text, visual_description):
+        """Generate meme caption using GPT-2 based on OCR text and visual description"""
+        # Create prompt combining OCR text and visual description
+        if ocr_text and visual_description:
+            prompt = f"Meme image shows: {visual_description}. Text says: {ocr_text}. Meme caption:"
+        elif ocr_text:
+            prompt = f"Meme text: {ocr_text}. Caption:"
+        elif visual_description:
+            prompt = f"Image shows: {visual_description}. Meme caption:"
+        else:
+            prompt = "Meme caption:"
+        
+        # Tokenize
+        inputs = self.gpt2_tokenizer(prompt, return_tensors="pt", padding=True).to(self.device)
+        
+        # Generate with GPT-2
+        with torch.no_grad():
+            outputs = self.gpt2_model.generate(
+                inputs.input_ids,
+                attention_mask=inputs.attention_mask,
+                max_length=len(inputs.input_ids[0]) + 50,
+                num_beams=5,
+                temperature=0.8,
+                top_k=50,
+                top_p=0.95,
+                do_sample=True,
+                no_repeat_ngram_size=3,
+                pad_token_id=self.gpt2_tokenizer.eos_token_id
+            )
+        
+        # Decode and extract only the generated part
+        full_text = self.gpt2_tokenizer.decode(outputs[0], skip_special_tokens=True)
+        caption = full_text[len(prompt):].strip()
+        
+        if not caption or len(caption) < 5:
+            caption = full_text.strip()
+        
+        return caption
     
     def _analyze_sentiment_blip2(self, image, ocr_text):
         """
