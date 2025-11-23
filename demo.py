@@ -34,15 +34,16 @@ class MemeAnalyzer:
         
         # Initialize fine-tuned model
         print("Loading fine-tuned BLIP-2 model...")
-        self.model = MemeCrafterModel(use_lora=config.use_lora)
         
         # Load fine-tuned weights if provided
         if model_path and not use_base_model:
             print(f"Loading fine-tuned model from {model_path}")
-            self.model.load_model(model_path)
+            # FIX: load_model is a classmethod that returns a new instance
+            self.model = MemeCrafterModel.load_model(model_path)
             self.is_finetuned = True
         else:
             print("Using base BLIP-2 model")
+            self.model = MemeCrafterModel(use_lora=config.use_lora)
             self.is_finetuned = False
         
         self.model.to(self.device)
@@ -128,54 +129,65 @@ class MemeAnalyzer:
         Use BLIP-2 to analyze sentiment by asking it directly
         This leverages the fine-tuned model's understanding of memes
         """
-        # Ask BLIP-2 about the sentiment
-        sentiment_prompt = "Question: What is the sentiment of this meme? Answer with one word: positive, negative, neutral, or sarcastic. Answer:"
-        
+        # Ask BLIP-2 about the sentiment - IMPROVED PROMPT
+        # Simpler prompt that's less likely to be echoed
         if ocr_text:
-            sentiment_prompt = f"This meme says '{ocr_text}'. Question: What is the sentiment? Answer with one word: positive, negative, neutral, or sarcastic. Answer:"
+            sentiment_prompt = f"This meme says: '{ocr_text}'. Question: What is the sentiment? Answer:"
+        else:
+            sentiment_prompt = "Question: What is the sentiment of this image? Answer:"
         
         sentiment_response = self.model.generate_caption(
             image, 
             prompt=sentiment_prompt, 
-            max_length=100,
+            max_length=20,  # Shorter to avoid rambling
             num_beams=3,
-            temperature=0.5
+            temperature=0.3,  # Lower temperature for more focused response
+            do_sample=False   # Greedy decoding for consistency
         ).lower().strip()
         
-        print(f"BLIP-2 sentiment response: {sentiment_response}")
+        print(f"BLIP-2 sentiment response: '{sentiment_response}'")
         
-        # Parse the response
-        sentiment_map = {
-            'positive': 'positive',
-            'negative': 'negative', 
-            'neutral': 'neutral',
-            'sarcastic': 'sarcastic',
-            'happy': 'positive',
-            'sad': 'negative',
-            'funny': 'positive',
-            'angry': 'negative',
-            'humorous': 'positive',
-            'ironic': 'sarcastic',
-            'satirical': 'sarcastic'
+        # Parse the response with better word matching
+        sentiment_keywords = {
+            'positive': ['positive', 'happy', 'funny', 'humorous', 'joyful', 'cheerful', 'good'],
+            'negative': ['negative', 'sad', 'angry', 'bad', 'upset', 'annoyed'],
+            'neutral': ['neutral', 'normal', 'calm', 'indifferent'],
+            'sarcastic': ['sarcastic', 'ironic', 'satirical', 'mocking']
         }
         
-        detected_sentiment = 'neutral'  # default
-        for keyword, sentiment in sentiment_map.items():
-            if keyword in sentiment_response:
-                detected_sentiment = sentiment
-                break
+        # Count sentiment keyword matches
+        sentiment_scores = {}
+        response_words = sentiment_response.split()
         
-        # Get confidence by asking BLIP-2 to explain why
-        explanation_prompt = f"Question: Why is this meme {detected_sentiment}? Answer:"
+        for sentiment, keywords in sentiment_keywords.items():
+            count = sum(1 for keyword in keywords if keyword in sentiment_response)
+            if count > 0:
+                sentiment_scores[sentiment] = count
+        
+        # Determine detected sentiment
+        if sentiment_scores:
+            detected_sentiment = max(sentiment_scores, key=sentiment_scores.get)
+        else:
+            # Fallback: check for simple matches
+            detected_sentiment = 'neutral'
+            for sentiment, keywords in sentiment_keywords.items():
+                if any(kw in sentiment_response for kw in keywords):
+                    detected_sentiment = sentiment
+                    break
+        
+        # Get explanation by asking BLIP-2
         if ocr_text:
-            explanation_prompt = f"This meme says '{ocr_text}'. Question: Why is it {detected_sentiment}? Answer:"
+            explanation_prompt = f"This meme shows: '{ocr_text}'. Question: Describe the mood. Answer:"
+        else:
+            explanation_prompt = "Question: Describe the mood of this image. Answer:"
             
         explanation = self.model.generate_caption(
             image,
             prompt=explanation_prompt,
-            max_length=100,
+            max_length=60,
             num_beams=3,
-            temperature=0.7
+            temperature=0.7,
+            do_sample=True
         )
         
         # Create scores dict for compatibility with summary generation

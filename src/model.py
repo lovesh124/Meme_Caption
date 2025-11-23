@@ -103,6 +103,7 @@ class MemeCrafterModel(nn.Module):
             "length_penalty": config.length_penalty,
             "do_sample": True,
         }
+        # Allow overriding any parameter
         gen_kwargs.update(generation_kwargs)
         
         # Generate caption
