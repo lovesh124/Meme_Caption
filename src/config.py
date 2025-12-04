@@ -1,4 +1,4 @@
-"""
+""" 
 Configuration file for MemeCrafter model
 Contains all hyperparameters and paths
 """
